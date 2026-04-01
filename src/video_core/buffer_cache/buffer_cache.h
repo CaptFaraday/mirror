@@ -58,17 +58,22 @@ void BufferCache<P>::RunGarbageCollector() {
     const bool aggressive_gc = total_used_memory >= critical_memory;
     const u64 ticks_to_destroy = aggressive_gc ? 60 : 120;
     int num_iterations = aggressive_gc ? 64 : 32;
-    const auto clean_up = [this, &num_iterations](BufferId buffer_id) {
+    const u64 threshold = frame_tick - ticks_to_destroy;
+    boost::container::small_vector<BufferId, 64> expired;
+    for (auto [id, buffer] : slot_buffers) {
+        if (buffer.GetFrameTick() < threshold) {
+            expired.push_back(id);
+        }
+    }
+    for (const auto buffer_id : expired) {
         if (num_iterations == 0) {
-            return true;
+            break;
         }
         --num_iterations;
         auto& buffer = slot_buffers[buffer_id];
         DownloadBufferMemory(buffer);
         DeleteBuffer(buffer_id);
-        return false;
-    };
-    lru_cache.ForEachItemBelow(frame_tick - ticks_to_destroy, clean_up);
+    }
 }
 
 template <class P>
@@ -1595,10 +1600,9 @@ void BufferCache<P>::ChangeRegister(BufferId buffer_id) {
     const auto size = buffer.SizeBytes();
     if (insert) {
         total_used_memory += Common::AlignUp(size, 1024);
-        buffer.setLRUID(lru_cache.Insert(buffer_id, frame_tick));
+        buffer.SetFrameTick(frame_tick);
     } else {
         total_used_memory -= Common::AlignUp(size, 1024);
-        lru_cache.Free(buffer.getLRUID());
     }
     const DAddr device_addr_begin = buffer.CpuAddr();
     const DAddr device_addr_end = device_addr_begin + size;
@@ -1616,7 +1620,7 @@ void BufferCache<P>::ChangeRegister(BufferId buffer_id) {
 template <class P>
 void BufferCache<P>::TouchBuffer(Buffer& buffer, BufferId buffer_id) noexcept {
     if (buffer_id != NULL_BUFFER_ID) {
-        lru_cache.Touch(buffer.getLRUID(), frame_tick);
+        buffer.SetFrameTick(frame_tick);
     }
 }
 

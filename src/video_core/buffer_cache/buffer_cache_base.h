@@ -23,7 +23,6 @@
 #include "common/common_types.h"
 #include "common/div_ceil.h"
 #include "common/literals.h"
-#include "common/lru_cache.h"
 #include "common/range_sets.h"
 #include "common/scope_exit.h"
 #include "common/settings.h"
@@ -506,11 +505,6 @@ private:
     size_t immediate_buffer_capacity = 0;
     Common::ScratchBuffer<u8> immediate_buffer_alloc;
 
-    struct LRUItemParams {
-        using ObjectType = BufferId;
-        using TickType = u64;
-    };
-    Common::LeastRecentlyUsedCache<LRUItemParams> lru_cache;
     u64 frame_tick = 0;
     u64 total_used_memory = 0;
     u64 minimum_memory = 0;

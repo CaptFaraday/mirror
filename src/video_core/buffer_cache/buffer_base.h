@@ -109,12 +109,12 @@ public:
         return static_cast<u32>(other_cpu_addr - cpu_addr);
     }
 
-    size_t getLRUID() const noexcept {
-        return lru_id;
+    u64 GetFrameTick() const noexcept {
+        return frame_tick;
     }
 
-    void setLRUID(size_t lru_id_) {
-        lru_id = lru_id_;
+    void SetFrameTick(u64 tick) noexcept {
+        frame_tick = tick;
     }
 
     size_t SizeBytes() const {
@@ -125,7 +125,7 @@ private:
     VAddr cpu_addr = 0;
     BufferFlagBits flags{};
     int stream_score = 0;
-    size_t lru_id = SIZE_MAX;
+    u64 frame_tick = 0;
     size_t size_bytes = 0;
 };
 
