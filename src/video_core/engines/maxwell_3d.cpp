@@ -4,8 +4,14 @@
 // SPDX-FileCopyrightText: Copyright 2018 yuzu Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <algorithm>
 #include <cstring>
 #include <optional>
+
+#if defined(_MSC_VER) && !defined(__clang__)
+#include <intrin.h>
+#endif
+
 #include "common/assert.h"
 #include "common/bit_util.h"
 #include "common/scope_exit.h"
@@ -22,6 +28,16 @@
 
 namespace Tegra::Engines {
 
+namespace {
+inline void PrefetchLine(const void* addr) {
+#if defined(_MSC_VER) && !defined(__clang__)
+    _mm_prefetch(static_cast<const char*>(addr), _MM_HINT_T0);
+#else
+    __builtin_prefetch(addr, 0, 1);
+#endif
+}
+} // namespace
+
 /// First register id that is actually a Macro call.
 constexpr u32 MacroRegistersStart = 0xE00;
 
@@ -37,9 +53,10 @@ Maxwell3D::Maxwell3D(Core::System& system_, MemoryManager& memory_manager_)
 {
     dirty.flags.flip();
     InitializeRegisterDefaults();
-    execution_mask.reset();
-    for (size_t i = 0; i < execution_mask.size(); i++)
+    execution_mask.fill(0);
+    for (size_t i = 0; i < EXECUTION_MASK_TABLE_SIZE; i++)
         execution_mask[i] = IsMethodExecutable(u32(i));
+    execution_mask_default = true;
 }
 
 Maxwell3D::~Maxwell3D() = default;
@@ -298,18 +315,44 @@ u32 Maxwell3D::ProcessShadowRam(u32 method, u32 argument) {
 }
 
 void Maxwell3D::ConsumeSinkImpl() {
+    std::stable_sort(method_sink.begin(), method_sink.end(),
+                     [](const auto& a, const auto& b) { return a.first < b.first; });
+
+    const auto sink_size = method_sink.size();
     const auto control = shadow_state.shadow_ram_control;
     if (control == Regs::ShadowRamControl::Track || control == Regs::ShadowRamControl::TrackWithFilter) {
-        for (auto [method, value] : method_sink) {
+        for (size_t i = 0; i < sink_size; ++i) {
+            const auto [method, value] = method_sink[i];
+            if (i + 1 < sink_size) {
+                const u32 next = method_sink[i + 1].first;
+                PrefetchLine(&regs.reg_array[next]);
+                PrefetchLine(&shadow_state.reg_array[next]);
+                PrefetchLine(&dirty.tables[0][next]);
+            }
             shadow_state.reg_array[method] = value;
             ProcessDirtyRegisters(method, value);
         }
     } else if (control == Regs::ShadowRamControl::Replay) {
-        for (auto [method, value] : method_sink)
+        for (size_t i = 0; i < sink_size; ++i) {
+            const auto [method, value] = method_sink[i];
+            if (i + 1 < sink_size) {
+                const u32 next = method_sink[i + 1].first;
+                PrefetchLine(&regs.reg_array[next]);
+                PrefetchLine(&shadow_state.reg_array[next]);
+                PrefetchLine(&dirty.tables[0][next]);
+            }
             ProcessDirtyRegisters(method, shadow_state.reg_array[method]);
+        }
     } else {
-        for (auto [method, value] : method_sink)
+        for (size_t i = 0; i < sink_size; ++i) {
+            const auto [method, value] = method_sink[i];
+            if (i + 1 < sink_size) {
+                const u32 next = method_sink[i + 1].first;
+                PrefetchLine(&regs.reg_array[next]);
+                PrefetchLine(&dirty.tables[0][next]);
+            }
             ProcessDirtyRegisters(method, value);
+        }
     }
     method_sink.clear();
 }

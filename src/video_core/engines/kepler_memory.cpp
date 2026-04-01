@@ -22,7 +22,7 @@ KeplerMemory::~KeplerMemory() = default;
 void KeplerMemory::BindRasterizer(VideoCore::RasterizerInterface* rasterizer_) {
     upload_state.BindRasterizer(rasterizer_);
 
-    execution_mask.reset();
+    execution_mask.fill(0);
     execution_mask[KEPLERMEMORY_REG_INDEX(exec)] = true;
     execution_mask[KEPLERMEMORY_REG_INDEX(data)] = true;
 }

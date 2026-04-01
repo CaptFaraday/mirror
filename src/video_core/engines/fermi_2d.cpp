@@ -26,7 +26,7 @@ Fermi2D::Fermi2D(MemoryManager& memory_manager_) : memory_manager{memory_manager
     regs.src.depth = 1;
     regs.dst.depth = 1;
 
-    execution_mask.reset();
+    execution_mask.fill(0);
     execution_mask[FERMI2D_REG_INDEX(pixels_from_memory.src_y0) + 1] = true;
 }
 

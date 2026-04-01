@@ -122,7 +122,35 @@ void DmaPusher::ProcessCommands(std::span<const CommandHeader> commands) {
             dma_state.is_last_call = true;
             index += max_write;
         } else if (dma_state.method_count) {
-            auto const command_header = commands[index]; //can copy
+            if (!dma_state.non_incrementing && !dma_increment_once &&
+                dma_state.method >= non_puller_methods) {
+                auto subchannel = subchannels[dma_state.subchannel];
+                const u32 available = u32(std::min<size_t>(
+                    index + dma_state.method_count, commands.size()) - index);
+                u32 batch = 0;
+                u32 method = dma_state.method;
+                while (batch < available) {
+                    const bool needs_exec =
+                        (method < Engines::EngineInterface::EXECUTION_MASK_TABLE_SIZE)
+                            ? subchannel->execution_mask[method]
+                            : subchannel->execution_mask_default;
+                    if (needs_exec) break;
+                    batch++;
+                    method++;
+                }
+                if (batch > 0) {
+                    auto& sink = subchannel->method_sink;
+                    sink.reserve(sink.size() + batch);
+                    for (u32 j = 0; j < batch; j++) {
+                        sink.emplace_back(dma_state.method + j, commands[index + j].argument);
+                    }
+                    dma_state.method += batch;
+                    dma_state.method_count -= batch;
+                    index += batch;
+                    continue;
+                }
+            }
+            auto const command_header = commands[index];
             dma_state.dma_word_offset = u32(index * sizeof(u32));
             dma_state.is_last_call = dma_state.method_count <= 1;
             CallMethod(command_header.argument);
@@ -181,7 +209,11 @@ void DmaPusher::CallMethod(u32 argument) const {
         });
     } else {
         auto subchannel = subchannels[dma_state.subchannel];
-        if (!subchannel->execution_mask[dma_state.method]) {
+        const bool needs_execution =
+            (dma_state.method < Engines::EngineInterface::EXECUTION_MASK_TABLE_SIZE)
+                ? subchannel->execution_mask[dma_state.method]
+                : subchannel->execution_mask_default;
+        if (!needs_execution) {
             subchannel->method_sink.emplace_back(dma_state.method, argument);
         } else {
             subchannel->ConsumeSink();

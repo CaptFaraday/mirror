@@ -6,9 +6,9 @@
 
 #pragma once
 
-#include <bitset>
-#include <limits>
-#include <vector>
+#include <array>
+
+#include <boost/container/small_vector.hpp>
 
 #include "common/common_types.h"
 
@@ -41,8 +41,11 @@ public:
         ConsumeSinkImpl();
     }
 
-    std::bitset<(std::numeric_limits<u16>::max)()> execution_mask{};
-    std::vector<std::pair<u32, u32>> method_sink{};
+    static constexpr size_t EXECUTION_MASK_TABLE_SIZE = 0xE00;
+
+    std::array<u8, EXECUTION_MASK_TABLE_SIZE> execution_mask{};
+    bool execution_mask_default{};
+    boost::container::small_vector<std::pair<u32, u32>, 64> method_sink{};
     bool current_dirty{};
     GPUVAddr current_dma_segment;
 
