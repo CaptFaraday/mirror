@@ -16,6 +16,8 @@ class System;
 
 namespace Service::PSC::Time {
 
+#undef GetCurrentTime
+
 class SystemClock final : public ServiceFramework<SystemClock> {
 public:
     explicit SystemClock(Core::System& system, SystemClockCore& system_clock_core,
