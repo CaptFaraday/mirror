@@ -40,16 +40,13 @@ struct CodeBlockInfo {
 };
 
 class SigHandler {
-    static constexpr std::size_t signal_stack_size = std::max<std::size_t>(SIGSTKSZ, 2 * 1024 * 1024);
-
     auto FindCodeBlockInfo(u64 offset) noexcept {
         return std::find_if(code_block_infos.begin(), code_block_infos.end(), [&](auto const& e) {
             return e.first <= offset && e.first + e.second.size > offset;
         });
     }
     static void SigAction(int sig, siginfo_t* info, void* raw_context);
-
-    alignas(16) std::array<u8, signal_stack_size> signal_stack_memory;
+    std::vector<u8> signal_stack_memory;
     ankerl::unordered_dense::map<u64, CodeBlockInfo> code_block_infos;
     std::shared_mutex code_block_infos_mutex;
     struct sigaction old_sa_segv;
@@ -57,9 +54,10 @@ class SigHandler {
     bool supports_fast_mem = true;
 public:
     SigHandler() noexcept {
+        signal_stack_memory.resize(std::max<std::size_t>(SIGSTKSZ, 2 * 1024 * 1024), 0);
         stack_t signal_stack{};
-        signal_stack.ss_sp = std::addressof(signal_stack_memory);
-        signal_stack.ss_size = signal_stack_size;
+        signal_stack.ss_sp = signal_stack_memory.data();
+        signal_stack.ss_size = signal_stack_memory.size();
         signal_stack.ss_flags = 0;
         if (sigaltstack(&signal_stack, nullptr) != 0) {
             fmt::print(stderr, "dynarmic: POSIX SigHandler: init failure at sigaltstack\n");
