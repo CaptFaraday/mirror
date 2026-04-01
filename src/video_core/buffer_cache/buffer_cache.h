@@ -61,7 +61,7 @@ void BufferCache<P>::RunGarbageCollector() {
     const u64 threshold = frame_tick - ticks_to_destroy;
     boost::container::small_vector<BufferId, 64> expired;
     for (auto [id, buffer] : slot_buffers) {
-        if (buffer.GetFrameTick() < threshold) {
+        if (buffer->GetFrameTick() < threshold) {
             expired.push_back(id);
         }
     }
