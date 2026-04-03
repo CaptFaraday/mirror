@@ -22,7 +22,7 @@
 #include "common/common_types.h"
 #include "common/hash.h"
 #include "common/literals.h"
-#include "common/lru_cache.h"
+
 #include <ranges>
 #include "common/scratch_buffer.h"
 #include "common/slot_vector.h"
@@ -510,11 +510,7 @@ private:
     std::deque<std::vector<AsyncBuffer>> async_buffers;
     std::deque<AsyncBuffer> async_buffers_death_ring;
 
-    struct LRUItemParams {
-        using ObjectType = ImageId;
-        using TickType = u64;
-    };
-    Common::LeastRecentlyUsedCache<LRUItemParams> lru_cache;
+
 
  #ifdef YUZU_LEGACY
     static constexpr size_t TICKS_TO_DESTROY = 6;

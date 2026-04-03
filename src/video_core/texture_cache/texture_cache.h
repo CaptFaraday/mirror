@@ -196,11 +196,21 @@ void TextureCache<P>::RunGarbageCollector() {
         return false;
     };
 
+    const auto CollectBelow = [this](u64 threshold) {
+        boost::container::small_vector<ImageId, 64> expired;
+        for (auto [id, image] : slot_images) {
+            if (image->last_use_tick < threshold) {
+                expired.push_back(id);
+            }
+        }
+        return expired;
+    };
+
     // Aggressively clear massive sparse textures
     if (total_used_memory >= expected_memory) {
-        lru_cache.ForEachItemBelow(frame_tick, [&](ImageId image_id) {
+        auto candidates = CollectBelow(frame_tick);
+        for (const auto image_id : candidates) {
             auto& image = slot_images[image_id];
-            // Only target sparse textures that are old enough
             if (lowmemorydevice &&
                 image.info.is_sparse &&
                 image.guest_size_bytes >= 256_MiB &&
@@ -208,19 +218,32 @@ void TextureCache<P>::RunGarbageCollector() {
                 LOG_DEBUG(HW_GPU, "GC targeting old sparse texture at 0x{:X} ({} MiB, age: {} frames)",
                          image.gpu_addr, image.guest_size_bytes / (1024 * 1024),
                          frame_tick - image.allocation_tick);
-                return Cleanup(image_id);
+                if (Cleanup(image_id)) {
+                    break;
+                }
             }
-            return false;
-        });
+        }
     }
 
     Configure(false);
-    lru_cache.ForEachItemBelow(frame_tick - ticks_to_destroy, Cleanup);
+    {
+        auto expired = CollectBelow(frame_tick - ticks_to_destroy);
+        for (const auto image_id : expired) {
+            if (Cleanup(image_id)) {
+                break;
+            }
+        }
+    }
 
     // If pressure is still too high, prune aggressively.
     if (total_used_memory >= critical_memory) {
         Configure(true);
-        lru_cache.ForEachItemBelow(frame_tick - ticks_to_destroy, Cleanup);
+        auto expired = CollectBelow(frame_tick - ticks_to_destroy);
+        for (const auto image_id : expired) {
+            if (Cleanup(image_id)) {
+                break;
+            }
+        }
     }
 }
 
@@ -2028,7 +2051,7 @@ std::pair<u32, u32> TextureCache<P>::PrepareDmaImage(ImageId dst_id, GPUVAddr ba
     const auto base = image.TryFindBase(base_addr);
     PrepareImage(dst_id, mark_as_modified, false);
     const auto& new_image = slot_images[dst_id];
-    lru_cache.Touch(new_image.lru_index, frame_tick);
+    new_image.last_use_tick = frame_tick;
     return std::make_pair(base->level, base->layer);
 }
 
@@ -2377,7 +2400,7 @@ void TextureCache<P>::RegisterImage(ImageId image_id) {
         tentative_size = TranscodedAstcSize(tentative_size, image.info.format);
     }
     total_used_memory += Common::AlignUp(tentative_size, 1024);
-    image.lru_index = lru_cache.Insert(image_id, frame_tick);
+    image.last_use_tick = frame_tick;
 
     ForEachGPUPage(image.gpu_addr, image.guest_size_bytes, [this, image_id](u64 page) {
         (*channel_state->gpu_page_table)[page].push_back(image_id);
@@ -2411,7 +2434,7 @@ void TextureCache<P>::UnregisterImage(ImageId image_id) {
                "Trying to unregister an already registered image");
     image.flags &= ~ImageFlagBits::Registered;
     image.flags &= ~ImageFlagBits::BadOverlap;
-    lru_cache.Free(image.lru_index);
+
     const auto& clear_page_table =
         [image_id](u64 page, ankerl::unordered_dense::map<u64, std::vector<ImageId>, Common::IdentityHash<u64>>& selected_page_table) {
             const auto page_it = selected_page_table.find(page);
@@ -2740,7 +2763,7 @@ void TextureCache<P>::PrepareImage(ImageId image_id, bool is_modification, bool 
     if (is_modification) {
         MarkModification(image);
     }
-    lru_cache.Touch(image.lru_index, frame_tick);
+    image.last_use_tick = frame_tick;
 }
 
 template <class P>
