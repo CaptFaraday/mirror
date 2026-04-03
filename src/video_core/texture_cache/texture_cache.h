@@ -199,7 +199,8 @@ void TextureCache<P>::RunGarbageCollector() {
     const auto CollectBelow = [this](u64 threshold) {
         boost::container::small_vector<ImageId, 64> expired;
         for (auto [id, image] : slot_images) {
-            if (image->last_use_tick < threshold) {
+            if (True(image->flags & ImageFlagBits::Registered) &&
+                image->last_use_tick < threshold) {
                 expired.push_back(id);
             }
         }
@@ -226,7 +227,7 @@ void TextureCache<P>::RunGarbageCollector() {
     }
 
     Configure(false);
-    {
+    if (frame_tick > ticks_to_destroy) {
         auto expired = CollectBelow(frame_tick - ticks_to_destroy);
         for (const auto image_id : expired) {
             if (Cleanup(image_id)) {
@@ -238,10 +239,12 @@ void TextureCache<P>::RunGarbageCollector() {
     // If pressure is still too high, prune aggressively.
     if (total_used_memory >= critical_memory) {
         Configure(true);
-        auto expired = CollectBelow(frame_tick - ticks_to_destroy);
-        for (const auto image_id : expired) {
-            if (Cleanup(image_id)) {
-                break;
+        if (frame_tick > ticks_to_destroy) {
+            auto expired = CollectBelow(frame_tick - ticks_to_destroy);
+            for (const auto image_id : expired) {
+                if (Cleanup(image_id)) {
+                    break;
+                }
             }
         }
     }
