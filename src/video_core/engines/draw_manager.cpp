@@ -1,5 +1,7 @@
-// SPDX-FileCopyrightText: Copyright 2022 yuzu Emulator Project
-// SPDX-License-Identifier: GPL-2.0-or-later
+// SPDX-FileCopyrightText: Copyright 2026 Eden Emulator Project
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+#include <limits>
 
 #include "common/settings.h"
 #include "video_core/dirty_flags.h"
@@ -8,6 +10,123 @@
 
 namespace Tegra::Engines {
 DrawManager::DrawManager(Maxwell3D* maxwell3d_) : maxwell3d(maxwell3d_) {}
+
+namespace {
+constexpr u32 IndexCountGuardLimit = 64u * 1024u;
+constexpr u32 DrawOffsetGuardLimit = 256u * 1024u * 1024u;
+constexpr size_t IndirectBufferSizeGuardLimit = 64ull * 1024ull * 1024ull;
+
+struct BufferSignature {
+    bool valid{};
+    u32 count{};
+    u32 first{};
+    u32 base_index{};
+    u32 base_instance{};
+    u64 span_bytes{};
+    u64 available_bytes{};
+    bool range_overflow{};
+    bool end_index_overflow{};
+    bool span_overflow{};
+    bool bounds_invalid{};
+    size_t max_draw_counts{};
+    size_t buffer_size{};
+};
+
+[[nodiscard]] bool DiscardCorrupted(bool draw_indexed, bool include_indirect,
+                                    const DrawManager::State& state,
+                                    size_t max_draw_counts, size_t buffer_size,
+                                    BufferSignature& last) {
+    const u32 count = draw_indexed ? state.index_buffer.count : state.vertex_buffer.count;
+    const u32 first = draw_indexed ? state.index_buffer.first : state.vertex_buffer.first;
+    const u32 base_index = state.base_index;
+    const u32 base_instance = state.base_instance;
+    const bool suspicious_offsets = first > DrawOffsetGuardLimit ||
+                                    base_index > DrawOffsetGuardLimit ||
+                                    base_instance > DrawOffsetGuardLimit;
+
+    bool range_overflow = false;
+    bool end_index_overflow = false;
+    bool span_overflow = false;
+    bool bounds_invalid = false;
+    u64 span_bytes = 0;
+    u64 available_bytes = 0;
+
+    if (draw_indexed) {
+        const u64 first64 = state.index_buffer.first;
+        const u64 count64 = state.index_buffer.count;
+        const u64 format_bytes = state.index_buffer.FormatSizeInBytes();
+        const u64 buffer_start = state.index_buffer.StartAddress();
+        const u64 buffer_end = state.index_buffer.EndAddress();
+        end_index_overflow = first64 > ((std::numeric_limits<u64>::max)() - count64);
+        const u64 end_index = end_index_overflow ? 0 : first64 + count64;
+        span_overflow = format_bytes == 0 ||
+                        (end_index > ((std::numeric_limits<u64>::max)() / format_bytes));
+        span_bytes = (end_index_overflow || span_overflow) ? (std::numeric_limits<u64>::max)()
+                                                           : end_index * format_bytes;
+        bounds_invalid = buffer_end < buffer_start;
+        available_bytes = bounds_invalid ? 0 : (buffer_end - buffer_start);
+    } else {
+        const u64 first64 = state.vertex_buffer.first;
+        const u64 count64 = state.vertex_buffer.count;
+        range_overflow = first64 > ((std::numeric_limits<u64>::max)() - count64);
+    }
+
+    bool blocked = count > IndexCountGuardLimit || suspicious_offsets || range_overflow ||
+                   end_index_overflow || span_overflow || bounds_invalid;
+    if (draw_indexed) {
+        blocked = blocked || span_bytes > available_bytes;
+    }
+    if (include_indirect) {
+        blocked = blocked || max_draw_counts > IndexCountGuardLimit ||
+                  buffer_size > IndirectBufferSizeGuardLimit;
+    }
+    if (!blocked) {
+        return false;
+    }
+
+    const bool same = last.valid && last.count == count && last.first == first &&
+                      last.base_index == base_index && last.base_instance == base_instance &&
+                      last.span_bytes == span_bytes && last.available_bytes == available_bytes &&
+                      last.range_overflow == range_overflow &&
+                      last.end_index_overflow == end_index_overflow &&
+                      last.span_overflow == span_overflow &&
+                      last.bounds_invalid == bounds_invalid &&
+                      last.max_draw_counts == max_draw_counts && last.buffer_size == buffer_size;
+    if (!same) {
+        const char* const label =
+            include_indirect
+                ? (draw_indexed ? "DrawManager: blocked indexed indirect draw"
+                                : "DrawManager: blocked vertex indirect draw")
+                : (draw_indexed ? "DrawManager: blocked indexed draw"
+                                : "DrawManager: blocked vertex draw");
+        LOG_WARNING(HW_GPU,
+                    "{} path={} count={} limit={} first=0x{:X} base_index=0x{:X} "
+                    "base_instance=0x{:X} span_bytes={} available={} "
+                    "overflow(range={} index_end={} span={}) bounds_invalid={} "
+                    "offset_limit={} max_draw_count={} buffer_size={} "
+                    "indirect_limits(count={} buffer={})",
+                    label, draw_indexed ? "indexed" : "vertex", count, IndexCountGuardLimit,
+                    first, base_index, base_instance, span_bytes, available_bytes, range_overflow,
+                    end_index_overflow, span_overflow, bounds_invalid, DrawOffsetGuardLimit,
+                    max_draw_counts, buffer_size, IndexCountGuardLimit,
+                    IndirectBufferSizeGuardLimit);
+        last = {.valid = true,
+                .count = count,
+                .first = first,
+                .base_index = base_index,
+                .base_instance = base_instance,
+                .span_bytes = span_bytes,
+                .available_bytes = available_bytes,
+                .range_overflow = range_overflow,
+                .end_index_overflow = end_index_overflow,
+                .span_overflow = span_overflow,
+                .bounds_invalid = bounds_invalid,
+                .max_draw_counts = max_draw_counts,
+                .buffer_size = buffer_size};
+    }
+    return true;
+}
+} // namespace
 
 void DrawManager::ProcessMethodCall(u32 method, u32 argument) {
     const auto& regs{maxwell3d->regs};
@@ -264,6 +383,15 @@ void DrawManager::ProcessDraw(bool draw_indexed, u32 instance_count) {
     LOG_TRACE(HW_GPU, "called, topology={}, count={}", draw_state.topology,
               draw_indexed ? draw_state.index_buffer.count : draw_state.vertex_buffer.count);
 
+    static thread_local BufferSignature last_direct[2]{};
+    if (DiscardCorrupted(draw_indexed, false, draw_state, 0, 0,
+                         last_direct[draw_indexed ? 1 : 0])) {
+        if (draw_indexed) {
+            draw_state.draw_indexed = false;
+        }
+        return;
+    }
+
     UpdateTopology();
 
     if (maxwell3d->ShouldExecute()) {
@@ -277,6 +405,13 @@ void DrawManager::ProcessDrawIndirect() {
         "called, topology={}, is_indexed={}, includes_count={}, buffer_size={}, max_draw_count={}",
         draw_state.topology, indirect_state.is_indexed, indirect_state.include_count,
         indirect_state.buffer_size, indirect_state.max_draw_counts);
+
+    static thread_local BufferSignature last_indirect[2]{};
+    if (DiscardCorrupted(indirect_state.is_indexed, true, draw_state,
+                         indirect_state.max_draw_counts, indirect_state.buffer_size,
+                         last_indirect[indirect_state.is_indexed ? 1 : 0])) {
+        return;
+    }
 
     UpdateTopology();
 

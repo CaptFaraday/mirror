@@ -97,6 +97,29 @@ void KeplerCompute::ProcessLaunch() {
     const GPUVAddr launch_desc_loc = regs.launch_desc_loc.Address();
     memory_manager.ReadBlockUnsafe(launch_desc_loc, &launch_description,
                                    LaunchParams::NUM_LAUNCH_PARAMETERS * sizeof(u32));
+
+    static constexpr u32 ComputeGridDimGuardLimit = 0xFFFFu; // 65535 per dimension
+    const u32 x = launch_description.grid_dim_x;
+    const u32 y = launch_description.grid_dim_y;
+    const u32 z = launch_description.grid_dim_z;
+    if (x > ComputeGridDimGuardLimit || y > ComputeGridDimGuardLimit ||
+        z > ComputeGridDimGuardLimit) {
+        struct BlockedDispatchSignature {
+            u32 x = 0, y = 0, z = 0;
+            bool valid = false;
+        };
+        static thread_local BlockedDispatchSignature last_blocked{};
+        const bool same = last_blocked.valid && last_blocked.x == x &&
+                            last_blocked.y == y && last_blocked.z == z;
+        if (!same) {
+            LOG_WARNING(HW_GPU,
+                      "KeplerCompute: blocked oversized dispatch x={} y={} z={} limit={}",
+                      x, y, z, ComputeGridDimGuardLimit);
+            last_blocked = {x, y, z, true};
+        }
+        return;
+    }
+
     rasterizer->DispatchCompute();
 }
 
