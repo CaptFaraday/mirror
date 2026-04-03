@@ -118,17 +118,10 @@ TextureCache<P>::TextureCache(Runtime& runtime_, Tegra::MaxwellDeviceMemoryManag
 
 template <class P>
 void TextureCache<P>::RunGarbageCollector() {
-    bool high_priority_mode = false;
+    bool high_priority_mode = total_used_memory >= expected_memory;
     bool aggressive_mode = false;
-    u64 ticks_to_destroy = 0;
-    size_t num_iterations = 0;
-
-    const auto Configure = [&](bool allow_aggressive) {
-        high_priority_mode = total_used_memory >= expected_memory;
-        aggressive_mode = allow_aggressive && total_used_memory >= critical_memory;
-        ticks_to_destroy = aggressive_mode ? 10ULL : high_priority_mode ? 25ULL : 50ULL;
-        num_iterations = aggressive_mode ? 40 : (high_priority_mode ? 20 : 10);
-    };
+    u64 ticks_to_destroy = high_priority_mode ? 25ULL : 50ULL;
+    size_t num_iterations = high_priority_mode ? 20 : 10;
 
     const auto Cleanup = [this, &num_iterations, &high_priority_mode,
                           &aggressive_mode](ImageId image_id) {
@@ -145,12 +138,9 @@ void TextureCache<P>::RunGarbageCollector() {
         }
 
         if (True(image.flags & ImageFlagBits::IsDecoding)) {
-            // This image is still being decoded, deleting it will invalidate the slot
-            // used by the async decoder thread.
             return false;
         }
 
-        // Prioritize large sparse textures for cleanup
         const bool is_large_sparse = lowmemorydevice &&
                                      image.info.is_sparse &&
                                      image.guest_size_bytes >= 256_MiB;
@@ -183,7 +173,6 @@ void TextureCache<P>::RunGarbageCollector() {
 
         if (total_used_memory < critical_memory) {
             if (aggressive_mode) {
-                // Sink the aggresiveness.
                 num_iterations >>= 2;
                 aggressive_mode = false;
                 return false;
@@ -196,55 +185,53 @@ void TextureCache<P>::RunGarbageCollector() {
         return false;
     };
 
-    const auto CollectBelow = [this](u64 threshold) {
-        boost::container::small_vector<ImageId, 64> expired;
-        for (auto [id, image] : slot_images) {
-            if (True(image->flags & ImageFlagBits::Registered) &&
-                image->last_use_tick < threshold) {
-                expired.push_back(id);
-            }
-        }
-        return expired;
-    };
+    // Single pass: collect all candidates, classified by tier
+    const u64 normal_threshold = frame_tick > ticks_to_destroy ? frame_tick - ticks_to_destroy : 0;
+    const u64 aggressive_threshold = frame_tick > 10 ? frame_tick - 10 : 0;
+    boost::container::small_vector<ImageId, 64> sparse_candidates;
+    boost::container::small_vector<ImageId, 64> expired;
+    boost::container::small_vector<ImageId, 64> aggressive_expired;
 
-    // Aggressively clear massive sparse textures
-    if (total_used_memory >= expected_memory) {
-        auto candidates = CollectBelow(frame_tick);
-        for (const auto image_id : candidates) {
-            auto& image = slot_images[image_id];
-            if (lowmemorydevice &&
-                image.info.is_sparse &&
-                image.guest_size_bytes >= 256_MiB &&
-                image.allocation_tick < frame_tick - 3) {
-                LOG_DEBUG(HW_GPU, "GC targeting old sparse texture at 0x{:X} ({} MiB, age: {} frames)",
-                         image.gpu_addr, image.guest_size_bytes / (1024 * 1024),
-                         frame_tick - image.allocation_tick);
-                if (Cleanup(image_id)) {
-                    break;
-                }
-            }
+    for (auto [id, image] : slot_images) {
+        if (False(image->flags & ImageFlagBits::Registered)) {
+            continue;
+        }
+        const u64 tick = image->last_use_tick;
+        if (tick < normal_threshold) {
+            expired.push_back(id);
+        } else if (tick < aggressive_threshold) {
+            aggressive_expired.push_back(id);
+        } else if (high_priority_mode && tick < frame_tick &&
+                   lowmemorydevice && image->info.is_sparse &&
+                   image->guest_size_bytes >= 256_MiB) {
+            sparse_candidates.push_back(id);
         }
     }
 
-    Configure(false);
-    if (frame_tick > ticks_to_destroy) {
-        auto expired = CollectBelow(frame_tick - ticks_to_destroy);
-        for (const auto image_id : expired) {
+    // Tier 1: large sparse textures under memory pressure
+    for (const auto image_id : sparse_candidates) {
+        auto& image = slot_images[image_id];
+        if (image.allocation_tick < frame_tick - 3) {
             if (Cleanup(image_id)) {
                 break;
             }
         }
     }
 
-    // If pressure is still too high, prune aggressively.
+    // Tier 2: normal expiration
+    for (const auto image_id : expired) {
+        if (Cleanup(image_id)) {
+            break;
+        }
+    }
+
+    // Tier 3: if still critical, use aggressive threshold with more iterations
     if (total_used_memory >= critical_memory) {
-        Configure(true);
-        if (frame_tick > ticks_to_destroy) {
-            auto expired = CollectBelow(frame_tick - ticks_to_destroy);
-            for (const auto image_id : expired) {
-                if (Cleanup(image_id)) {
-                    break;
-                }
+        aggressive_mode = true;
+        num_iterations = 40;
+        for (const auto image_id : aggressive_expired) {
+            if (Cleanup(image_id)) {
+                break;
             }
         }
     }
