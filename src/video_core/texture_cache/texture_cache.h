@@ -2050,7 +2050,7 @@ std::pair<u32, u32> TextureCache<P>::PrepareDmaImage(ImageId dst_id, GPUVAddr ba
     const auto& image = slot_images[dst_id];
     const auto base = image.TryFindBase(base_addr);
     PrepareImage(dst_id, mark_as_modified, false);
-    const auto& new_image = slot_images[dst_id];
+    auto& new_image = slot_images[dst_id];
     new_image.last_use_tick = frame_tick;
     return std::make_pair(base->level, base->layer);
 }
