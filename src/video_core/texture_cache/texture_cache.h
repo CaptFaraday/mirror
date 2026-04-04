@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <limits>
 #include <optional>
 #include <bit>
@@ -128,7 +129,7 @@ void TextureCache<P>::RunGarbageCollector() {
         if (num_iterations == 0) {
             return true;
         }
-        --num_iterations;
+        
         auto& image = slot_images[image_id];
 
         // Never delete recently allocated sparse textures (within 3 frames)
@@ -155,6 +156,8 @@ void TextureCache<P>::RunGarbageCollector() {
         if (!high_priority_mode && !is_large_sparse && must_download) {
             return false;
         }
+
+        --num_iterations;
 
         if (must_download && !is_large_sparse) {
             auto map = runtime.DownloadStagingBuffer(image.unswizzled_size_bytes);
@@ -185,6 +188,12 @@ void TextureCache<P>::RunGarbageCollector() {
         return false;
     };
 
+    const auto SortByAge = [this](auto& vec) {
+        std::sort(vec.begin(), vec.end(), [this](ImageId a, ImageId b) {
+            return slot_images[a].last_use_tick < slot_images[b].last_use_tick;
+        });
+    };
+
     // Single pass: collect all candidates, classified by tier
     const u64 normal_threshold = frame_tick > ticks_to_destroy ? frame_tick - ticks_to_destroy : 0;
     const u64 aggressive_threshold = frame_tick > 10 ? frame_tick - 10 : 0;
@@ -207,6 +216,9 @@ void TextureCache<P>::RunGarbageCollector() {
             sparse_candidates.push_back(id);
         }
     }
+
+    SortByAge(expired);
+    SortByAge(aggressive_expired);
 
     // Tier 1: large sparse textures under memory pressure
     for (const auto image_id : sparse_candidates) {
