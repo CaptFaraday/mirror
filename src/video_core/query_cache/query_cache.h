@@ -293,13 +293,13 @@ void QueryCacheBase<Traits>::CounterReport(GPUVAddr addr, QueryType counter_type
         }
     });
     if (is_fence) {
-        //if (is_payload) {
-        //    impl->rasterizer.SyncOperation(std::move(operation));
-        //    std::function<void()> noop([] {});
-        //    impl->rasterizer.SignalFence(std::move(noop));
-        //} else {
+        if (Settings::getDebugKnobAt(0) && is_payload) {
+            impl->rasterizer.SyncOperation(std::move(operation));
+            std::function<void()> noop([] {});
+            impl->rasterizer.SignalFence(std::move(noop));
+        } else {
             impl->rasterizer.SignalFence(std::move(operation));
-        //}
+        }
     } else {
         if (!Settings::IsGPULevelHigh() && is_payload) {
             if (has_timestamp) {
