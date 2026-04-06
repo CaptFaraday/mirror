@@ -12,7 +12,7 @@ namespace Tegra::Engines {
 DrawManager::DrawManager(Maxwell3D* maxwell3d_) : maxwell3d(maxwell3d_) {}
 
 namespace {
-constexpr u32 IndexCountGuardLimit = 64u * 1024u;
+constexpr u32 IndexCountGuardLimit = 1u * 1024u * 1024u;
 constexpr u32 DrawOffsetGuardLimit = 256u * 1024u * 1024u;
 constexpr size_t IndirectBufferSizeGuardLimit = 64ull * 1024ull * 1024ull;
 
