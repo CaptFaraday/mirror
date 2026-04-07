@@ -286,10 +286,6 @@ std::unique_ptr<TranslationMap> InitializeTranslations(QObject* parent) {
     INSERT(Settings, vertex_input_dynamic_state, tr("Vertex Input Dynamic State"),
            tr("Enables vertex input dynamic state feature for better quality and performance."));
 
-    INSERT(Settings, descriptor_indexing, tr("Descriptor Indexing"),
-           tr("Improves texture & buffer handling and the Maxwell translation layer.\n"
-              "Some Vulkan 1.1+ and all 1.2+ devices support this extension."));
-
     INSERT(
         Settings, sample_shading, tr("Sample Shading"),
         tr("Allows the fragment shader to execute per sample in a multi-sampled fragment "

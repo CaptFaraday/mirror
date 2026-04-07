@@ -102,7 +102,6 @@ VK_DEFINE_HANDLE(VmaAllocator)
     EXTENSION(NV, GEOMETRY_SHADER_PASSTHROUGH, geometry_shader_passthrough)                        \
     EXTENSION(NV, VIEWPORT_ARRAY2, viewport_array2)                                                \
     EXTENSION(NV, VIEWPORT_SWIZZLE, viewport_swizzle)                                              \
-    EXTENSION(EXT, DESCRIPTOR_INDEXING, descriptor_indexing)                                       \
     EXTENSION(EXT, FILTER_CUBIC, filter_cubic)                                                     \
     EXTENSION(IMG, FILTER_CUBIC, filter_cubic_img)                                                 \
     EXTENSION(QCOM, FILTER_CUBIC_WEIGHTS, filter_cubic_weights)
@@ -438,11 +437,6 @@ public:
     /// Returns true if the device supports VK_NV_viewport_array2.
     bool IsNvViewportArray2Supported() const {
         return extensions.viewport_array2;
-    }
-
-    /// Returns true if the device supporst VK_EXT_DESCRIPTOR_INDEXING
-    bool isExtDescriptorIndexingSupported() const {
-        return extensions.descriptor_indexing;
     }
 
     /// Returns true if the device supports VK_NV_geometry_shader_passthrough.

@@ -1155,18 +1155,6 @@ Higher states allow for more features and can increase performance, but may caus
         <translation>Вмикає можливість динамічного стану введення вершин для кращих якості й продуктивності.</translation>
     </message>
     <message>
-        <location filename="../../src/qt_common/config/shared_translation.cpp" line="297"/>
-        <source>Descriptor Indexing</source>
-        <translation>Індексування дескрипторів</translation>
-    </message>
-    <message>
-        <location filename="../../src/qt_common/config/shared_translation.cpp" line="298"/>
-        <source>Improves texture &amp; buffer handling and the Maxwell translation layer.
-Some Vulkan 1.1+ and all 1.2+ devices support this extension.</source>
-        <translation>Покращує взаємодію з текстурами й буфером, а також шар перетворення Maxwell.
-Це розширення підтримують деякі пристрої з Vulkan 1.1+ та всі з 1.2+.</translation>
-    </message>
-    <message>
         <location filename="../../src/qt_common/config/shared_translation.cpp" line="302"/>
         <source>Sample Shading</source>
         <translation>Шейдинг зразків</translation>

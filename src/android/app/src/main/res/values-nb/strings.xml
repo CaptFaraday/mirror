@@ -360,8 +360,6 @@
     <string name="renderer_asynchronous_shaders_description">Kompilerer shadere asynkront. Dette kan redusere rykk, men kan også forårsake grafiske feil.</string>
     <string name="dyna_state">Utvidet dynamisk tilstand</string>
     <string name="disabled">Deaktivert</string>
-    <string name="descriptor_indexing">Beskrivelsesindeksering</string>
-    <string name="descriptor_indexing_description">Forbedrer tekstur- og bufferhåndtering, samt Maxwell-oversettelseslaget. Støttes av noen Vulkan 1.1 GPU-er og alle Vulkan 1.2+ GPU-er.</string>
     <string name="display">Skjerm</string>
 
     <string name="renderer_screen_layout">Orientering</string>

@@ -418,8 +418,6 @@
     <string name="renderer_asynchronous_shaders_description">Compila gli shader in modo asincrono. Può ridurre gli scatti, ma può anche causare glitch grafici.</string>
     <string name="dyna_state">Stato dinamico esteso</string>
     <string name="disabled">Disabilitato</string>
-    <string name="descriptor_indexing">Indicizzazione descrittori</string>
-    <string name="descriptor_indexing_description">Migliora la gestione di texture e buffer, nonché il livello di traduzione Maxwell. Supportato da alcune GPU Vulkan 1.1 e tutte le GPU Vulkan 1.2+.</string>
     <string name="display">Schermo</string>
 
     <string name="renderer_screen_layout">Orientamento</string>

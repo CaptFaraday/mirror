@@ -1160,18 +1160,6 @@ Högre tillstånd möjliggör fler funktioner och kan öka prestandan, men kan o
         <translation>Aktiverar funktionen för dynamiskt tillstånd för vertexinmatning för bättre kvalitet och prestanda.</translation>
     </message>
     <message>
-        <location filename="../../src/qt_common/config/shared_translation.cpp" line="297"/>
-        <source>Descriptor Indexing</source>
-        <translation>Indexering av deskriptorer</translation>
-    </message>
-    <message>
-        <location filename="../../src/qt_common/config/shared_translation.cpp" line="298"/>
-        <source>Improves texture &amp; buffer handling and the Maxwell translation layer.
-Some Vulkan 1.1+ and all 1.2+ devices support this extension.</source>
-        <translation>Förbättrar textur- och bufferthantering samt Maxwell-översättningslagret.
-Vissa Vulkan 1.1+ och alla 1.2+ enheter stöder detta tillägg.</translation>
-    </message>
-    <message>
         <location filename="../../src/qt_common/config/shared_translation.cpp" line="302"/>
         <source>Sample Shading</source>
         <translation>Provskuggning</translation>

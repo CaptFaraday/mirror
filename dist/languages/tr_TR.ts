@@ -1114,17 +1114,6 @@ Higher states allow for more features and can increase performance, but may caus
         <translation>Daha iyi kalite ve performans için Vertex dinamik durum özelliğini etkinleştirir.</translation>
     </message>
     <message>
-        <location filename="../../src/qt_common/config/shared_translation.cpp" line="297"/>
-        <source>Descriptor Indexing</source>
-        <translation>Tanımlayıcı İndeksleme</translation>
-    </message>
-    <message>
-        <location filename="../../src/qt_common/config/shared_translation.cpp" line="298"/>
-        <source>Improves texture &amp; buffer handling and the Maxwell translation layer.
-Some Vulkan 1.1+ and all 1.2+ devices support this extension.</source>
-        <translation>Doku ve arabellek işlemeyi ve Maxwell çeviri katmanını iyileştirir. Bazı Vulkan 1.1 ve üzeri ile tüm 1.2 ve üzeri cihazlar bu uzantıyı destekler.</translation>
-    </message>
-    <message>
         <location filename="../../src/qt_common/config/shared_translation.cpp" line="302"/>
         <source>Sample Shading</source>
         <translation>Örnek Gölgelendirme</translation>

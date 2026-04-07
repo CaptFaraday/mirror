@@ -1097,18 +1097,6 @@ Higher states allow for more features and can increase performance, but may caus
         <translation type="unfinished"/>
     </message>
     <message>
-        <location filename="../../src/qt_common/config/shared_translation.cpp" line="297"/>
-        <source>Descriptor Indexing</source>
-        <translation type="unfinished"/>
-    </message>
-    <message>
-        <location filename="../../src/qt_common/config/shared_translation.cpp" line="298"/>
-        <source>Improves texture &amp; buffer handling and the Maxwell translation layer.
-Some Vulkan 1.1+ and all 1.2+ devices support this extension.</source>
-        <translation>Cải thiện việc xử lý texture và bộ đệm buffer, cũng như lớp dịch Maxwell.
-Một số thiết bị hỗ trợ Vulkan 1.1+ và tất cả thiết bị Vulkan 1.2+ đều hỗ trợ tiện ích mở rộng này.</translation>
-    </message>
-    <message>
         <location filename="../../src/qt_common/config/shared_translation.cpp" line="302"/>
         <source>Sample Shading</source>
         <translation type="unfinished"/>

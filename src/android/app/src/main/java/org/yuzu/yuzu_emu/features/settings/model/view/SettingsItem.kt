@@ -149,13 +149,6 @@ abstract class SettingsItem(
                 )
             )
             put(
-                SwitchSetting(
-                    BooleanSetting.RENDERER_DESCRIPTOR_INDEXING,
-                    titleId = R.string.descriptor_indexing,
-                    descriptionId = R.string.descriptor_indexing_description
-                )
-            )
-            put(
                 SliderSetting(
                     IntSetting.RENDERER_SAMPLE_SHADING,
                     titleId = R.string.sample_shading_fraction,
