@@ -1078,11 +1078,6 @@ bool Device::GetSuitability(bool requires_swapchain) {
             VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_5_PROPERTIES_KHR;
         SetNext(next, properties.maintenance5);
     }
-    if (extensions.multi_draw) {
-        properties.multi_draw.sType =
-            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTI_DRAW_PROPERTIES_EXT;
-        SetNext(next, properties.multi_draw);
-    }
 
     // Perform the property fetch.
     physical.GetProperties2(properties2);
@@ -1316,17 +1311,6 @@ void Device::RemoveUnsuitableExtensions() {
     RemoveExtensionFeatureIfUnsuitable(extensions.vertex_input_dynamic_state,
                                        features.vertex_input_dynamic_state,
                                        VK_EXT_VERTEX_INPUT_DYNAMIC_STATE_EXTENSION_NAME);
-
-    // VK_EXT_multi_draw
-    extensions.multi_draw = features.multi_draw.multiDraw;
-
-    if (extensions.multi_draw) {
-        LOG_INFO(Render_Vulkan, "VK_EXT_multi_draw: maxMultiDrawCount={}",
-                 properties.multi_draw.maxMultiDrawCount);
-    }
-
-    RemoveExtensionFeatureIfUnsuitable(extensions.multi_draw, features.multi_draw,
-                                       VK_EXT_MULTI_DRAW_EXTENSION_NAME);
 
     // VK_KHR_pipeline_executable_properties
     if (Settings::values.renderer_shader_feedback.GetValue()) {
