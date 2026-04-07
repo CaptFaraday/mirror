@@ -64,7 +64,6 @@ VK_DEFINE_HANDLE(VmaAllocator)
     FEATURE(EXT, Robustness2, ROBUSTNESS_2, robustness2)                                           \
     FEATURE(EXT, TransformFeedback, TRANSFORM_FEEDBACK, transform_feedback)                        \
     FEATURE(EXT, VertexInputDynamicState, VERTEX_INPUT_DYNAMIC_STATE, vertex_input_dynamic_state)  \
-    FEATURE(EXT, SwapchainMaintenance1, SWAPCHAIN_MAINTENANCE_1, swapchain_maintenance1)           \
     FEATURE(KHR, Maintenance5, MAINTENANCE_5, maintenance5)                                        \
     FEATURE(KHR, Maintenance6, MAINTENANCE_6, maintenance6)                                        \
     FEATURE(KHR, PipelineExecutableProperties, PIPELINE_EXECUTABLE_PROPERTIES,                     \
@@ -471,11 +470,6 @@ public:
     /// Returns true if VK_KHR_swapchain_mutable_format is enabled.
     bool IsKhrSwapchainMutableFormatEnabled() const {
         return extensions.swapchain_mutable_format;
-    }
-
-    /// Returns true if VK_EXT_swapchain_maintenance1 is enabled.
-    bool IsExtSwapchainMaintenance1Enabled() const {
-        return extensions.swapchain_maintenance1;
     }
 
     /// Returns true if VK_KHR_shader_float_controls is enabled.
