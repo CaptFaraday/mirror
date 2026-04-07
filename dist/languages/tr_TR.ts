@@ -1114,17 +1114,6 @@ Higher states allow for more features and can increase performance, but may caus
         <translation>Daha iyi kalite ve performans için Vertex dinamik durum özelliğini etkinleştirir.</translation>
     </message>
     <message>
-        <location filename="../../src/qt_common/config/shared_translation.cpp" line="293"/>
-        <source>Provoking Vertex</source>
-        <translation>Provoking Vertex</translation>
-    </message>
-    <message>
-        <location filename="../../src/qt_common/config/shared_translation.cpp" line="294"/>
-        <source>Improves lighting and vertex handling in some games.
-Only Vulkan 1.0+ devices support this extension.</source>
-        <translation>Bazı oyunlarda aydınlatmayı ve köşe işlemeyi iyileştirir. Bu uzantıyı yalnızca Vulkan 1.0 ve üzeri cihazlar destekler.</translation>
-    </message>
-    <message>
         <location filename="../../src/qt_common/config/shared_translation.cpp" line="297"/>
         <source>Descriptor Indexing</source>
         <translation>Tanımlayıcı İndeksleme</translation>

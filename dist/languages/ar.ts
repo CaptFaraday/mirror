@@ -1147,18 +1147,6 @@ Higher states allow for more features and can increase performance, but may caus
         <translation>يتيح ميزة الحالة الديناميكية لإدخال الرأس لتحسين الجودة والأداء.</translation>
     </message>
     <message>
-        <location filename="../../src/qt_common/config/shared_translation.cpp" line="293"/>
-        <source>Provoking Vertex</source>
-        <translation>استفزاز قمة الرأس</translation>
-    </message>
-    <message>
-        <location filename="../../src/qt_common/config/shared_translation.cpp" line="294"/>
-        <source>Improves lighting and vertex handling in some games.
-Only Vulkan 1.0+ devices support this extension.</source>
-        <translation>يُحسّن الإضاءة ومعالجة الرؤوس في بعض الألعاب.
-تدعم هذه الإضافة أجهزة Vulkan 1.0+‎ فقط.</translation>
-    </message>
-    <message>
         <location filename="../../src/qt_common/config/shared_translation.cpp" line="297"/>
         <source>Descriptor Indexing</source>
         <translation>فهرسة الوصف</translation>

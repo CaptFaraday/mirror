@@ -28,6 +28,10 @@ struct DynamicFeatures {
     bool has_extended_dynamic_state_3_blend;
     bool has_extended_dynamic_state_3_enables;
     bool has_dynamic_vertex_input;
+    bool has_provoking_vertex;
+    bool has_provoking_vertex_first_mode;
+    bool has_provoking_vertex_last_mode;
+    bool has_provoking_vertex_tf_preserve;
 };
 
 struct FixedPipelineState {

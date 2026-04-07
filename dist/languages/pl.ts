@@ -1146,18 +1146,6 @@ Wyższe poziomy pozwalają na użycie większej liczby funkcji i mogą zwiększy
         <translation>Włącza funkcję dynamicznego stanu wejścia wierzchołków, poprawiając jakość i wydajność.</translation>
     </message>
     <message>
-        <location filename="../../src/qt_common/config/shared_translation.cpp" line="293"/>
-        <source>Provoking Vertex</source>
-        <translation>Wierzchołek prowokujący</translation>
-    </message>
-    <message>
-        <location filename="../../src/qt_common/config/shared_translation.cpp" line="294"/>
-        <source>Improves lighting and vertex handling in some games.
-Only Vulkan 1.0+ devices support this extension.</source>
-        <translation>Poprawia oświetlenie i obsługę wierzchołków w niektórych grach.
-To rozszerzenie jest obsługiwane tylko na urządzeniach z Vulkanem 1.0+.</translation>
-    </message>
-    <message>
         <location filename="../../src/qt_common/config/shared_translation.cpp" line="297"/>
         <source>Descriptor Indexing</source>
         <translation>Indeksowanie deskryptorów</translation>

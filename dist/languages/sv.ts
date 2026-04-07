@@ -1160,18 +1160,6 @@ Högre tillstånd möjliggör fler funktioner och kan öka prestandan, men kan o
         <translation>Aktiverar funktionen för dynamiskt tillstånd för vertexinmatning för bättre kvalitet och prestanda.</translation>
     </message>
     <message>
-        <location filename="../../src/qt_common/config/shared_translation.cpp" line="293"/>
-        <source>Provoking Vertex</source>
-        <translation>Provocerande toppunkt</translation>
-    </message>
-    <message>
-        <location filename="../../src/qt_common/config/shared_translation.cpp" line="294"/>
-        <source>Improves lighting and vertex handling in some games.
-Only Vulkan 1.0+ devices support this extension.</source>
-        <translation>Förbättrar belysning och vertexhantering i vissa spel.
-Endast enheter med Vulkan 1.0+ stöder denna tilläggsfunktion.</translation>
-    </message>
-    <message>
         <location filename="../../src/qt_common/config/shared_translation.cpp" line="297"/>
         <source>Descriptor Indexing</source>
         <translation>Indexering av deskriptorer</translation>

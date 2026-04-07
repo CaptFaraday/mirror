@@ -719,6 +719,22 @@ public:
         return extensions.provoking_vertex;
     }
 
+    /// Returns true if first vertex provoking mode can be used.
+    bool SupportsProvokingVertexFirstMode() const {
+        return extensions.provoking_vertex;
+    }
+
+    /// Returns true if last vertex provoking mode can be used.
+    bool SupportsProvokingVertexLastMode() const {
+        return extensions.provoking_vertex && features.provoking_vertex.provokingVertexLast;
+    }
+
+    /// Returns true if transform feedback preserves provoking vertex mode semantics.
+    bool SupportsTransformFeedbackProvokingVertexPreservation() const {
+        return extensions.provoking_vertex &&
+               features.provoking_vertex.transformFeedbackPreservesProvokingVertex;
+    }
+
     /// Returns true if the device supports VK_KHR_shader_atomic_int64.
     bool IsExtShaderAtomicInt64Supported() const {
         return extensions.shader_atomic_int64;

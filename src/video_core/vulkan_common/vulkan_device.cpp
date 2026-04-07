@@ -1196,7 +1196,7 @@ void Device::RemoveUnsuitableExtensions() {
     RemoveExtensionFeatureIfUnsuitable(extensions.depth_clip_control, features.depth_clip_control,
                                        VK_EXT_DEPTH_CLIP_CONTROL_EXTENSION_NAME);
 
-    /* */ // VK_EXT_extended_dynamic_state
+    // VK_EXT_extended_dynamic_state
     extensions.extended_dynamic_state = features.extended_dynamic_state.extendedDynamicState;
     RemoveExtensionFeatureIfUnsuitable(extensions.extended_dynamic_state,
                                        features.extended_dynamic_state,
@@ -1268,7 +1268,6 @@ void Device::RemoveUnsuitableExtensions() {
                                        VK_EXT_EXTENDED_DYNAMIC_STATE_3_EXTENSION_NAME);
 
     // VK_EXT_robustness2
-    // Enable if at least one robustness2 feature is available
     extensions.robustness_2 = features.robustness2.robustBufferAccess2 ||
                               features.robustness2.robustImageAccess2 ||
                               features.robustness2.nullDescriptor;
@@ -1277,24 +1276,9 @@ void Device::RemoveUnsuitableExtensions() {
                                        VK_EXT_ROBUSTNESS_2_EXTENSION_NAME);
 
     // VK_EXT_image_robustness
-    // Enable if robustImageAccess is available
     extensions.image_robustness = features.image_robustness.robustImageAccess;
     RemoveExtensionFeatureIfUnsuitable(extensions.image_robustness, features.image_robustness,
                                        VK_EXT_IMAGE_ROBUSTNESS_EXTENSION_NAME);
-
-    // VK_EXT_provoking_vertex
-    if (Settings::values.provoking_vertex.GetValue()) {
-        extensions.provoking_vertex = features.provoking_vertex.provokingVertexLast
-                                      && features.provoking_vertex
-                                             .transformFeedbackPreservesProvokingVertex;
-        RemoveExtensionFeatureIfUnsuitable(extensions.provoking_vertex,
-                                           features.provoking_vertex,
-                                           VK_EXT_PROVOKING_VERTEX_EXTENSION_NAME);
-    } else {
-        RemoveExtensionFeature(extensions.provoking_vertex,
-                               features.provoking_vertex,
-                               VK_EXT_PROVOKING_VERTEX_EXTENSION_NAME);
-    }
 
     // VK_KHR_shader_atomic_int64
     extensions.shader_atomic_int64 = features.shader_atomic_int64.shaderBufferInt64Atomics &&
@@ -1319,21 +1303,12 @@ void Device::RemoveUnsuitableExtensions() {
                                        VK_EXT_SUBGROUP_SIZE_CONTROL_EXTENSION_NAME);
 
     // VK_EXT_transform_feedback
-    // We only require the basic transformFeedback feature and at least
-    // one transform feedback buffer. We keep transformFeedbackQueries as it's used by
-    // the streaming byte count implementation. GeometryStreams and multiple streams
-    // are not strictly required since we currently support only stream 0.
     extensions.transform_feedback =
         features.transform_feedback.transformFeedback &&
         properties.transform_feedback.maxTransformFeedbackBuffers > 0 &&
         properties.transform_feedback.transformFeedbackQueries;
     RemoveExtensionFeatureIfUnsuitable(extensions.transform_feedback, features.transform_feedback,
                                        VK_EXT_TRANSFORM_FEEDBACK_EXTENSION_NAME);
-    if (extensions.transform_feedback) {
-        LOG_INFO(Render_Vulkan, "VK_EXT_transform_feedback enabled (buffers={}, queries={})",
-                 properties.transform_feedback.maxTransformFeedbackBuffers,
-                 properties.transform_feedback.transformFeedbackQueries);
-    }
 
     // VK_EXT_vertex_input_dynamic_state
     extensions.vertex_input_dynamic_state =

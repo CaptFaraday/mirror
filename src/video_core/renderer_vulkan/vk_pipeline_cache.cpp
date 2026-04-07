@@ -490,6 +490,14 @@ PipelineCache::PipelineCache(Tegra::MaxwellDeviceMemoryManager& device_memory_,
     dynamic_features.has_dynamic_vertex_input =
         device.IsExtVertexInputDynamicStateSupported() &&
         Settings::values.vertex_input_dynamic_state.GetValue();
+
+    dynamic_features.has_provoking_vertex = device.IsExtProvokingVertexSupported();
+    dynamic_features.has_provoking_vertex_first_mode =
+        device.SupportsProvokingVertexFirstMode();
+    dynamic_features.has_provoking_vertex_last_mode =
+        device.SupportsProvokingVertexLastMode();
+    dynamic_features.has_provoking_vertex_tf_preserve =
+        device.SupportsTransformFeedbackProvokingVertexPreservation();
 }
 
 PipelineCache::~PipelineCache() {
