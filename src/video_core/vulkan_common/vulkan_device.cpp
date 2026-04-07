@@ -1352,15 +1352,15 @@ void Device::RemoveUnsuitableExtensions() {
                                        features.workgroup_memory_explicit_layout,
                                        VK_KHR_WORKGROUP_MEMORY_EXPLICIT_LAYOUT_EXTENSION_NAME);
 
-    // VK_KHR_maintenance1 (core in Vulkan 1.1, no features)
+    // VK_KHR_maintenance1
     extensions.maintenance1 = loaded_extensions.contains(VK_KHR_MAINTENANCE_1_EXTENSION_NAME);
     RemoveExtensionIfUnsuitable(extensions.maintenance1, VK_KHR_MAINTENANCE_1_EXTENSION_NAME);
 
-    // VK_KHR_maintenance2 (core in Vulkan 1.1, no features)
+    // VK_KHR_maintenance2
     extensions.maintenance2 = loaded_extensions.contains(VK_KHR_MAINTENANCE_2_EXTENSION_NAME);
     RemoveExtensionIfUnsuitable(extensions.maintenance2, VK_KHR_MAINTENANCE_2_EXTENSION_NAME);
 
-    // VK_KHR_maintenance3 (core in Vulkan 1.1, no features)
+    // VK_KHR_maintenance3
     extensions.maintenance3 = loaded_extensions.contains(VK_KHR_MAINTENANCE_3_EXTENSION_NAME);
     RemoveExtensionIfUnsuitable(extensions.maintenance3, VK_KHR_MAINTENANCE_3_EXTENSION_NAME);
 
@@ -1371,17 +1371,6 @@ void Device::RemoveUnsuitableExtensions() {
 
     // VK_KHR_maintenance5
     extensions.maintenance5 = features.maintenance5.maintenance5;
-
-    if (extensions.maintenance5) {
-        LOG_INFO(Render_Vulkan, "VK_KHR_maintenance5 properties: polygonModePointSize={} "
-                                "depthStencilSwizzleOne={} earlyFragmentTests={} nonStrictWideLines={}",
-                 properties.maintenance5.polygonModePointSize,
-                 properties.maintenance5.depthStencilSwizzleOneSupport,
-                 properties.maintenance5.earlyFragmentMultisampleCoverageAfterSampleCounting &&
-                 properties.maintenance5.earlyFragmentSampleMaskTestBeforeSampleCounting,
-                 properties.maintenance5.nonStrictWideLinesUseParallelogram);
-    }
-
     RemoveExtensionFeatureIfUnsuitable(extensions.maintenance5, features.maintenance5,
                                        VK_KHR_MAINTENANCE_5_EXTENSION_NAME);
 
@@ -1390,17 +1379,13 @@ void Device::RemoveUnsuitableExtensions() {
     RemoveExtensionFeatureIfUnsuitable(extensions.maintenance6, features.maintenance6,
                                        VK_KHR_MAINTENANCE_6_EXTENSION_NAME);
 
-    // VK_KHR_maintenance7 (proposed for Vulkan 1.4, no features)
+    // VK_KHR_maintenance7
     extensions.maintenance7 = loaded_extensions.contains(VK_KHR_MAINTENANCE_7_EXTENSION_NAME);
     RemoveExtensionIfUnsuitable(extensions.maintenance7, VK_KHR_MAINTENANCE_7_EXTENSION_NAME);
 
-    // VK_KHR_maintenance8 (proposed for Vulkan 1.4, no features)
+    // VK_KHR_maintenance8
     extensions.maintenance8 = loaded_extensions.contains(VK_KHR_MAINTENANCE_8_EXTENSION_NAME);
     RemoveExtensionIfUnsuitable(extensions.maintenance8, VK_KHR_MAINTENANCE_8_EXTENSION_NAME);
-
-    // VK_KHR_maintenance9 (proposed for Vulkan 1.4, no features)
-    extensions.maintenance9 = loaded_extensions.contains(VK_KHR_MAINTENANCE_9_EXTENSION_NAME);
-    RemoveExtensionIfUnsuitable(extensions.maintenance9, VK_KHR_MAINTENANCE_9_EXTENSION_NAME);
 }
 
 void Device::SetupFamilies(VkSurfaceKHR surface) {

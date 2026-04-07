@@ -99,7 +99,6 @@ VK_DEFINE_HANDLE(VmaAllocator)
     EXTENSION(KHR, MAINTENANCE_3, maintenance3)                                                    \
     EXTENSION(KHR, MAINTENANCE_7, maintenance7)                                                    \
     EXTENSION(KHR, MAINTENANCE_8, maintenance8)                                                    \
-    EXTENSION(KHR, MAINTENANCE_9, maintenance9)                                                    \
     EXTENSION(NV, DEVICE_DIAGNOSTICS_CONFIG, device_diagnostics_config)                            \
     EXTENSION(NV, GEOMETRY_SHADER_PASSTHROUGH, geometry_shader_passthrough)                        \
     EXTENSION(NV, VIEWPORT_ARRAY2, viewport_array2)                                                \
@@ -901,11 +900,6 @@ public:
     /// Returns true if the device supports VK_KHR_maintenance8.
     bool IsKhrMaintenance8Supported() const {
         return extensions.maintenance8;
-    }
-
-    /// Returns true if the device supports VK_KHR_maintenance9.
-    bool IsKhrMaintenance9Supported() const {
-        return extensions.maintenance9;
     }
 
     /// Returns true if the device supports UINT8 index buffer conversion via compute shader.
