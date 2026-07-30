@@ -16,9 +16,14 @@
 
 #include "core/hle/kernel/k_process.h"
 
+#include <fcntl.h>
 #include <signal.h>
 #include <sys/syscall.h>
 #include <unistd.h>
+
+#ifdef __ANDROID__
+#include <android/log.h>
+#endif
 
 namespace Core {
 
@@ -26,6 +31,204 @@ namespace {
 
 struct sigaction g_orig_bus_action;
 struct sigaction g_orig_segv_action;
+
+// -----------------------------------------------------------------------------
+// Temporary diagnostic instrumentation. Not intended for upstream merge.
+//
+// Tracks down a reproducible SIGILL / ILL_ILLOPC raised on a CPUCore thread from
+// inside the guest memory arena, reached via an indirect branch (x16 == pc).
+// NCE installs handlers for SIGBUS and SIGSEGV but none for SIGILL, so the
+// process dies with no emulator-side context at all.
+//
+// This handler records the faulting registers, the /proc/self/maps entries
+// around pc, and the bytes at pc, then restores the default action so the usual
+// tombstone is still produced. Reading our own maps needs no root.
+//
+// All-zero bytes at pc mean the page is mapped but unpopulated (torn down or
+// never filled). Real instructions mean the page was simply never patched.
+// -----------------------------------------------------------------------------
+struct sigaction g_orig_ill_action;
+
+// Static so the handler needs no allocator and very little stack.
+char g_diag_maps[192 * 1024];
+
+void DiagLog(const char* msg) {
+#ifdef __ANDROID__
+    __android_log_write(ANDROID_LOG_ERROR, "EDENDIAG", msg);
+#else
+    size_t len = 0;
+    while (msg[len] != '\0') {
+        ++len;
+    }
+    (void)::write(2, msg, len);
+    (void)::write(2, "\n", 1);
+#endif
+}
+
+char* DiagStr(char* out, const char* s) {
+    while (*s != '\0') {
+        *out++ = *s++;
+    }
+    return out;
+}
+
+char* DiagHex(char* out, u64 value, int digits) {
+    static constexpr char kHex[] = "0123456789abcdef";
+    for (int i = digits - 1; i >= 0; --i) {
+        out[i] = kHex[value & 0xF];
+        value >>= 4;
+    }
+    return out + digits;
+}
+
+u64 DiagHexVal(char c) {
+    if (c >= '0' && c <= '9') {
+        return static_cast<u64>(c - '0');
+    }
+    if (c >= 'a' && c <= 'f') {
+        return static_cast<u64>(c - 'a' + 10);
+    }
+    if (c >= 'A' && c <= 'F') {
+        return static_cast<u64>(c - 'A' + 10);
+    }
+    return 0;
+}
+
+// Emits one (non null-terminated) maps line with a prefix.
+void DiagLogLine(const char* prefix, const char* begin, const char* end) {
+    char buf[320];
+    char* out = DiagStr(buf, prefix);
+    const char* limit = buf + sizeof(buf) - 1;
+    while (begin < end && out < limit) {
+        *out++ = *begin++;
+    }
+    *out = '\0';
+    DiagLog(buf);
+}
+
+// Reports the mapping containing pc, its immediate neighbours, and the bytes at pc.
+void DiagReportMapping(u64 pc) {
+    const int fd = ::open("/proc/self/maps", O_RDONLY);
+    if (fd < 0) {
+        DiagLog("maps: open failed");
+        return;
+    }
+
+    size_t total = 0;
+    while (total < sizeof(g_diag_maps) - 1) {
+        const ssize_t n = ::read(fd, g_diag_maps + total, sizeof(g_diag_maps) - 1 - total);
+        if (n <= 0) {
+            break;
+        }
+        total += static_cast<size_t>(n);
+    }
+    ::close(fd);
+    g_diag_maps[total] = '\0';
+
+    const char* const buf_end = g_diag_maps + total;
+    const char* prev_begin = nullptr;
+    const char* prev_end = nullptr;
+    const char* line = g_diag_maps;
+    bool found = false;
+
+    while (line < buf_end) {
+        const char* eol = line;
+        while (eol < buf_end && *eol != '\n') {
+            ++eol;
+        }
+
+        u64 start = 0;
+        u64 end = 0;
+        const char* p = line;
+        while (p < eol && *p != '-') {
+            start = (start << 4) | DiagHexVal(*p);
+            ++p;
+        }
+        if (p < eol) {
+            ++p; // skip '-'
+        }
+        while (p < eol && *p != ' ') {
+            end = (end << 4) | DiagHexVal(*p);
+            ++p;
+        }
+
+        if (pc >= start && pc < end) {
+            found = true;
+            if (prev_begin != nullptr) {
+                DiagLogLine("maps prev: ", prev_begin, prev_end);
+            }
+            DiagLogLine("maps  PC : ", line, eol);
+
+            const char* next = (eol < buf_end) ? eol + 1 : buf_end;
+            if (next < buf_end) {
+                const char* next_eol = next;
+                while (next_eol < buf_end && *next_eol != '\n') {
+                    ++next_eol;
+                }
+                DiagLogLine("maps next: ", next, next_eol);
+            }
+
+            // Permissions sit immediately after the address range.
+            const bool readable = (p + 1 < eol) && (p[1] == 'r');
+            if (readable) {
+                char out[160];
+                char* w = DiagStr(out, "bytes at pc:");
+                const u32* words = reinterpret_cast<const u32*>(pc);
+                for (int i = 0; i < 8; ++i) {
+                    w = DiagStr(w, " ");
+                    w = DiagHex(w, words[i], 8);
+                }
+                *w = '\0';
+                DiagLog(out);
+            } else {
+                DiagLog("bytes at pc: region not readable");
+            }
+            break;
+        }
+
+        prev_begin = line;
+        prev_end = eol;
+        line = (eol < buf_end) ? eol + 1 : buf_end;
+    }
+
+    if (!found) {
+        DiagLog("maps: no mapping contains pc");
+    }
+}
+
+void DiagIllegalInstructionHandler(int sig, siginfo_t* info, void* raw_context) {
+    auto& host_ctx = static_cast<ucontext_t*>(raw_context)->uc_mcontext;
+
+    const u64 pc = host_ctx.pc;
+    const u64 x16 = host_ctx.regs[16];
+    const u64 x17 = host_ctx.regs[17];
+    const u64 lr = host_ctx.regs[30];
+
+    char line[320];
+    char* out = DiagStr(line, "SIGILL si_code=");
+    out = DiagHex(out, static_cast<u64>(info->si_code), 2);
+    out = DiagStr(out, " pc=0x");
+    out = DiagHex(out, pc, 16);
+    out = DiagStr(out, " x16=0x");
+    out = DiagHex(out, x16, 16);
+    out = DiagStr(out, " x17=0x");
+    out = DiagHex(out, x17, 16);
+    out = DiagStr(out, " lr=0x");
+    out = DiagHex(out, lr, 16);
+    out = DiagStr(out, " lr-pc=0x");
+    out = DiagHex(out, lr - pc, 16);
+    out = DiagStr(out, (x16 == pc) ? " [branched via x16]" : "");
+    *out = '\0';
+    DiagLog(line);
+
+    DiagReportMapping(pc);
+
+    // Restore the default action and return, so the faulting instruction re-executes
+    // and produces the normal tombstone.
+    struct sigaction dfl {};
+    dfl.sa_handler = SIG_DFL;
+    Common::SigAction(sig, &dfl, nullptr);
+}
 
 // Verify assembly offsets.
 using NativeExecutionParameters = Kernel::KThread::NativeExecutionParameters;
@@ -331,6 +534,14 @@ void ArmNce::Initialize() {
             reinterpret_cast<HandlerType>(&ArmNce::GuestAccessFaultSignalHandler);
         access_fault_action.sa_mask = signal_mask;
         Common::SigAction(GuestAccessFaultSignal, &access_fault_action, &g_orig_segv_action);
+
+        // Temporary diagnostic: NCE has no SIGILL handler, so an illegal instruction in
+        // guest code kills the process with no emulator-side context. Record what we can.
+        struct sigaction ill_diag_action {};
+        ill_diag_action.sa_flags = SA_SIGINFO | SA_ONSTACK;
+        ill_diag_action.sa_sigaction = &DiagIllegalInstructionHandler;
+        ill_diag_action.sa_mask = signal_mask;
+        Common::SigAction(SIGILL, &ill_diag_action, &g_orig_ill_action);
     });
 }
 

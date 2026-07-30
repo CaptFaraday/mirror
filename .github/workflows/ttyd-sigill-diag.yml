@@ -1,0 +1,61 @@
+name: TTYD SIGILL diagnostic build
+
+# Builds a debug Android APK carrying the temporary SIGILL diagnostic handler in
+# src/core/arm/nce/arm_nce.cpp. The debug build type applies applicationIdSuffix
+# ".debug", so it installs alongside an existing Eden rather than replacing it.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ttyd-sigill-diag]
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install Android NDK and SDK components
+        run: |
+          set -e
+          yes | sdkmanager --licenses > /dev/null 2>&1 || true
+          sdkmanager --install \
+            "ndk;28.2.13676358" \
+            "platforms;android-36" \
+            "build-tools;36.0.0" \
+            "cmake;3.22.1"
+          echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/28.2.13676358" >> "$GITHUB_ENV"
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build ccache glslang-tools
+
+      - name: Build (standard flavor, Debug)
+        run: |
+          chmod +x ./.ci/android/build.sh
+          ./.ci/android/build.sh -t standard -b Debug
+
+      - name: List artifacts
+        if: always()
+        run: ls -lR artifacts || true
+
+      - name: Upload APK
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eden-ttyd-sigill-diag-apk
+          path: |
+            artifacts/*.apk
+            artifacts/*.aab
+          if-no-files-found: warn
+          retention-days: 30
