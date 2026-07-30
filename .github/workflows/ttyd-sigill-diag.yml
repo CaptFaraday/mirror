@@ -7,7 +7,7 @@ name: TTYD SIGILL diagnostic build
 on:
   workflow_dispatch:
   push:
-    branches: [ttyd-sigill-diag]
+    branches: [ttyd-diag-master]
 
 jobs:
   android:
@@ -45,10 +45,20 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ninja-build ccache glslang-tools
 
-      - name: Build (standard flavor, Debug)
+      - name: Build (standard flavor, RelWithDebInfo)
         run: |
           chmod +x ./.ci/android/build.sh
-          ./.ci/android/build.sh -t standard -b Debug
+          set -o pipefail
+          ./.ci/android/build.sh -t standard -b RelWithDebInfo \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo 2>&1 | tee build.log
+
+      - name: Report native optimization level
+        if: always()
+        run: |
+          echo "--- CMAKE_BUILD_TYPE occurrences ---"
+          grep -oE "CMAKE_BUILD_TYPE=[A-Za-z]+" build.log | sort | uniq -c || true
+          echo "--- optimization flags passed to the compiler ---"
+          grep -oE " -O[0-3sgz]" build.log | sort | uniq -c || true
 
       - name: List artifacts
         if: always()
