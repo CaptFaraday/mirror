@@ -205,7 +205,20 @@ Result KPageTableBase::InitializeForProcess(Svc::CreateProcessFlag as_type, bool
     // Calculate region extents.
     const size_t as_width = GetAddressSpaceWidth(as_type);
     const KProcessAddress start = 0;
+#ifdef HAS_NCE
+    // NCE only reserves (1ULL << 38) of host virtual address space (VirtualReserveSize in
+    // core/device_memory.cpp), and KAddressSpaceInfo already truncates the Map39Bit region
+    // to match. The usable end of the process address space has to be truncated the same
+    // way. Otherwise the heap, alias, stack and kernel map regions below are placed at a
+    // random offset within (end - process_code_end), so ASLR can put them above the
+    // reserve, where HostMemory has no backing. Mappings there fail the bounds check in
+    // HostMemory::Map/Unmap, which is a soft assert that logs and continues, leaving the
+    // guest holding memory that is silently not there.
+    const size_t usable_as_width = as_width > 38 ? 38 : as_width;
+    const KProcessAddress end = (1ULL << usable_as_width);
+#else
     const KProcessAddress end = (1ULL << as_width);
+#endif
 
     // Validate the region.
     ASSERT(start <= code_address);
