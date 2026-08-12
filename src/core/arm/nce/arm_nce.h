@@ -42,6 +42,18 @@ public:
     void ClearInstructionCache() override;
     void InvalidateCacheRange(u64 addr, std::size_t size) override;
 
+    // Temporary TTYD-SIGILL diagnostics (definitions in arm_nce.cpp).
+    // Captured at module load time, read by the SIGILL handler.
+    struct DiagRegionInfo {
+        u64 code_start, code_size;
+        u64 stack_start, stack_size;
+        u64 alias_start, alias_size;
+        u64 heap_start, heap_size;
+        u64 arena_base;
+    };
+    static void DiagSetRegions(const DiagRegionInfo& info);
+    static void DiagAddModule(u64 base, u64 size);
+
     void LockThread(Kernel::KThread* thread) override;
     void UnlockThread(Kernel::KThread* thread) override;
 

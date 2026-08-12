@@ -50,7 +50,7 @@ struct sigaction g_orig_segv_action;
 struct sigaction g_orig_ill_action;
 
 // Static so the handler needs no allocator and very little stack.
-char g_diag_maps[192 * 1024];
+char g_diag_maps[512 * 1024];
 
 void DiagLog(const char* msg) {
 #ifdef __ANDROID__
@@ -104,6 +104,229 @@ void DiagLogLine(const char* prefix, const char* begin, const char* end) {
     }
     *out = '\0';
     DiagLog(buf);
+}
+
+// Load-time-captured layout info (written from KProcess::LoadModule, normal context).
+Core::ArmNce::DiagRegionInfo g_diag_regions{};
+bool g_diag_regions_valid = false;
+
+struct DiagModule {
+    u64 base;
+    u64 size;
+};
+DiagModule g_diag_modules[16];
+size_t g_diag_module_count = 0;
+
+// Readable-range index parsed from /proc/self/maps at fault time.
+struct DiagRange {
+    u64 start;
+    u64 end;
+};
+DiagRange g_diag_ranges[8192];
+size_t g_diag_range_count = 0;
+
+void DiagBuildRangeIndex() {
+    g_diag_range_count = 0;
+    const int fd = ::open("/proc/self/maps", O_RDONLY);
+    if (fd < 0) {
+        return;
+    }
+    size_t total = 0;
+    while (total < sizeof(g_diag_maps) - 1) {
+        const ssize_t n = ::read(fd, g_diag_maps + total, sizeof(g_diag_maps) - 1 - total);
+        if (n <= 0) {
+            break;
+        }
+        total += static_cast<size_t>(n);
+    }
+    ::close(fd);
+    g_diag_maps[total] = '\0';
+
+    const char* const buf_end = g_diag_maps + total;
+    const char* line = g_diag_maps;
+    while (line < buf_end && g_diag_range_count < 8192) {
+        const char* eol = line;
+        while (eol < buf_end && *eol != '\n') {
+            ++eol;
+        }
+        u64 start = 0;
+        u64 end = 0;
+        const char* p = line;
+        while (p < eol && *p != '-') {
+            start = (start << 4) | DiagHexVal(*p);
+            ++p;
+        }
+        if (p < eol) {
+            ++p; // skip '-'
+        }
+        while (p < eol && *p != ' ') {
+            end = (end << 4) | DiagHexVal(*p);
+            ++p;
+        }
+        // Permissions sit immediately after the address range; keep readable ranges.
+        if (p + 1 < eol && p[1] == 'r') {
+            g_diag_ranges[g_diag_range_count++] = {start, end};
+        }
+        line = (eol < buf_end) ? eol + 1 : buf_end;
+    }
+}
+
+bool DiagReadable(u64 addr, u64 len) {
+    for (size_t i = 0; i < g_diag_range_count; ++i) {
+        if (addr >= g_diag_ranges[i].start && addr + len <= g_diag_ranges[i].end) {
+            return true;
+        }
+    }
+    return false;
+}
+
+char* DiagResolveModule(char* out, u64 addr) {
+    for (size_t i = 0; i < g_diag_module_count; ++i) {
+        if (addr >= g_diag_modules[i].base &&
+            addr < g_diag_modules[i].base + g_diag_modules[i].size) {
+            out = DiagStr(out, " [mod");
+            out = DiagHex(out, static_cast<u64>(i), 1);
+            out = DiagStr(out, "+0x");
+            out = DiagHex(out, addr - g_diag_modules[i].base, 8);
+            out = DiagStr(out, "]");
+            return out;
+        }
+    }
+    return out;
+}
+
+// Raw dump of [sp, sp+0x400), 8 words per line, per-line readability check.
+void DiagDumpStack(u64 sp) {
+    for (int line_i = 0; line_i < 16; ++line_i) {
+        const u64 base = sp + static_cast<u64>(line_i) * 64;
+        char buf[320];
+        char* out = DiagStr(buf, "stack +0x");
+        out = DiagHex(out, static_cast<u64>(line_i) * 64, 3);
+        out = DiagStr(out, ":");
+        if (!DiagReadable(base, 64)) {
+            out = DiagStr(out, " <unmapped>");
+            *out = '\0';
+            DiagLog(buf);
+            continue;
+        }
+        const u64* words = reinterpret_cast<const u64*>(base);
+        for (int i = 0; i < 8; ++i) {
+            out = DiagStr(out, " ");
+            out = DiagHex(out, words[i], 16);
+        }
+        *out = '\0';
+        DiagLog(buf);
+    }
+}
+
+// AArch64 frame record walk: [fp] = prev fp, [fp+8] = lr. Hard cap, monotonic, validated.
+void DiagWalkFrames(u64 fp) {
+    for (int i = 0; i < 40; ++i) {
+        if (fp == 0 || (fp & 7) != 0 || !DiagReadable(fp, 16)) {
+            char buf[96];
+            char* out = DiagStr(buf, "frame walk stop: fp=0x");
+            out = DiagHex(out, fp, 16);
+            *out = '\0';
+            DiagLog(buf);
+            return;
+        }
+        const u64 next_fp = reinterpret_cast<const u64*>(fp)[0];
+        const u64 lr = reinterpret_cast<const u64*>(fp)[1];
+        char buf[192];
+        char* out = DiagStr(buf, "frame ");
+        out = DiagHex(out, static_cast<u64>(i), 2);
+        out = DiagStr(out, ": fp=0x");
+        out = DiagHex(out, fp, 16);
+        out = DiagStr(out, " lr=0x");
+        out = DiagHex(out, lr, 16);
+        out = DiagResolveModule(out, lr);
+        *out = '\0';
+        DiagLog(buf);
+        if (lr == 0 || next_fp <= fp) {
+            return;
+        }
+        fp = next_fp;
+    }
+}
+
+// Log region bounds, then every (YY << 32) | low32(x0) candidate that lands in a region.
+// The code region (256 GiB) is only tested against registered modules to avoid 64 junk lines.
+void DiagClassifyX0(u64 x0) {
+    const u64 low = x0 & 0xFFFFFFFFULL;
+    {
+        char buf[128];
+        char* out = DiagStr(buf, "arena=0x");
+        out = DiagHex(out, g_diag_regions.arena_base, 16);
+        out = DiagStr(out, " x0=0x");
+        out = DiagHex(out, x0, 16);
+        out = DiagStr(out, g_diag_regions_valid ? "" : " (regions not captured)");
+        *out = '\0';
+        DiagLog(buf);
+    }
+    if (!g_diag_regions_valid) {
+        return;
+    }
+    struct RegionRef {
+        const char* name;
+        u64 start;
+        u64 size;
+    };
+    const RegionRef regions[3] = {
+        {"stack", g_diag_regions.stack_start, g_diag_regions.stack_size},
+        {"alias", g_diag_regions.alias_start, g_diag_regions.alias_size},
+        {"heap ", g_diag_regions.heap_start, g_diag_regions.heap_size},
+    };
+    for (const RegionRef& r : regions) {
+        char buf[128];
+        char* out = DiagStr(buf, "region ");
+        out = DiagStr(out, r.name);
+        out = DiagStr(out, " [0x");
+        out = DiagHex(out, r.start, 16);
+        out = DiagStr(out, ", 0x");
+        out = DiagHex(out, r.start + r.size, 16);
+        out = DiagStr(out, ")");
+        *out = '\0';
+        DiagLog(buf);
+        for (u64 yy = r.start >> 32; yy <= (r.start + r.size - 1) >> 32; ++yy) {
+            const u64 cand = (yy << 32) | low;
+            if (cand >= r.start && cand < r.start + r.size) {
+                char buf2[128];
+                char* out2 = DiagStr(buf2, "  x0|hi -> 0x");
+                out2 = DiagHex(out2, cand, 16);
+                out2 = DiagStr(out2, " in ");
+                out2 = DiagStr(out2, r.name);
+                out2 = DiagStr(out2, " +0x");
+                out2 = DiagHex(out2, cand - r.start, 10);
+                *out2 = '\0';
+                DiagLog(buf2);
+            }
+        }
+    }
+    {
+        char buf[128];
+        char* out = DiagStr(buf, "region code  [0x");
+        out = DiagHex(out, g_diag_regions.code_start, 16);
+        out = DiagStr(out, ", +0x");
+        out = DiagHex(out, g_diag_regions.code_size, 12);
+        out = DiagStr(out, ") - testing modules only");
+        *out = '\0';
+        DiagLog(buf);
+    }
+    for (size_t i = 0; i < g_diag_module_count; ++i) {
+        const u64 mstart = g_diag_modules[i].base;
+        const u64 mend = mstart + g_diag_modules[i].size;
+        for (u64 yy = mstart >> 32; yy <= (mend - 1) >> 32; ++yy) {
+            const u64 cand = (yy << 32) | low;
+            if (cand >= mstart && cand < mend) {
+                char buf2[128];
+                char* out2 = DiagStr(buf2, "  x0|hi -> 0x");
+                out2 = DiagHex(out2, cand, 16);
+                out2 = DiagResolveModule(out2, cand);
+                *out2 = '\0';
+                DiagLog(buf2);
+            }
+        }
+    }
 }
 
 // Reports the mapping containing pc, its immediate neighbours, and the bytes at pc.
@@ -223,6 +446,22 @@ void DiagIllegalInstructionHandler(int sig, siginfo_t* info, void* raw_context) 
 
     DiagReportMapping(pc);
 
+    // Extended dump: readable-range index, x0 restore-and-classify, raw stack, frame chain.
+    // Must run after DiagReportMapping, which shares the g_diag_maps buffer.
+    DiagBuildRangeIndex();
+    DiagClassifyX0(host_ctx.regs[0]);
+    {
+        char buf2[96];
+        char* out2 = DiagStr(buf2, "sp=0x");
+        out2 = DiagHex(out2, host_ctx.sp, 16);
+        out2 = DiagStr(out2, " x29=0x");
+        out2 = DiagHex(out2, host_ctx.regs[29], 16);
+        *out2 = '\0';
+        DiagLog(buf2);
+    }
+    DiagDumpStack(host_ctx.sp);
+    DiagWalkFrames(host_ctx.regs[29]);
+
     // Restore the default action and return, so the faulting instruction re-executes
     // and produces the normal tombstone.
     struct sigaction dfl {};
@@ -248,6 +487,17 @@ using namespace Common::Literals;
 constexpr u32 StackSize = 128_KiB;
 
 } // namespace
+
+void ArmNce::DiagSetRegions(const DiagRegionInfo& info) {
+    g_diag_regions = info;
+    g_diag_regions_valid = true;
+}
+
+void ArmNce::DiagAddModule(u64 base, u64 size) {
+    if (g_diag_module_count < 16) {
+        g_diag_modules[g_diag_module_count++] = {base, size};
+    }
+}
 
 void* ArmNce::RestoreGuestContext(void* raw_context) {
     // Retrieve the host context.
@@ -320,6 +570,25 @@ bool ArmNce::HandleFailedGuestFault(GuestContext* guest_ctx, void* raw_info, voi
 
     // We can't handle the access, so determine why we crashed.
     const bool is_prefetch_abort = host_ctx.pc == reinterpret_cast<u64>(info->si_addr);
+
+    // Diagnostic: this skip was previously completely silent. DiagLog (not LOG_*) because
+    // we are inside the SIGSEGV/SIGBUS handler and fmt-based logging allocates.
+    {
+        char buf[192];
+        char* out = DiagStr(buf, "unhandled guest fault: pc=0x");
+        out = DiagHex(out, host_ctx.pc, 16);
+        out = DiagStr(out, " si_addr=0x");
+        out = DiagHex(out, reinterpret_cast<u64>(info->si_addr), 16);
+        if (!is_prefetch_abort) {
+            out = DiagStr(out, " insn=0x");
+            out = DiagHex(out, *reinterpret_cast<const u32*>(host_ctx.pc), 8);
+            out = DiagStr(out, " SKIPPING (pc += 4)");
+        } else {
+            out = DiagStr(out, " (prefetch abort)");
+        }
+        *out = '\0';
+        DiagLog(buf);
+    }
 
     // For data aborts, skip the instruction and return to guest code.
     // This will allow games to continue in many scenarios where they would otherwise crash.

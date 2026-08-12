@@ -1277,6 +1277,29 @@ void KProcess::LoadModule(KernelCore& kernel, CodeSet code_set, KProcessAddress 
     ReprotectSegment(code_set.DataSegment(), Svc::MemoryPermission::ReadWrite);
 
 #ifdef HAS_NCE
+    // TTYD SIGILL diagnostics: register module + region layout for the SIGILL handler.
+    if (this->IsApplication() && Settings::IsNceEnabled()) {
+        Core::ArmNce::DiagRegionInfo info{};
+        info.code_start = GetInteger(m_page_table.GetAliasCodeRegionStart());
+        info.code_size = m_page_table.GetAliasCodeRegionSize();
+        info.stack_start = GetInteger(m_page_table.GetStackRegionStart());
+        info.stack_size = m_page_table.GetStackRegionSize();
+        info.alias_start = GetInteger(m_page_table.GetAliasRegionStart());
+        info.alias_size = m_page_table.GetAliasRegionSize();
+        info.heap_start = GetInteger(m_page_table.GetHeapRegionStart());
+        info.heap_size = m_page_table.GetHeapRegionSize();
+        info.arena_base =
+            reinterpret_cast<u64>(kernel.System().DeviceMemory().buffer.VirtualBasePointer());
+        Core::ArmNce::DiagSetRegions(info);
+        Core::ArmNce::DiagAddModule(GetInteger(base_addr), code_set.memory.size());
+        LOG_INFO(Kernel,
+                 "EDENDIAG module base={:#x} size={:#x} stack=[{:#x},+{:#x}) alias=[{:#x},+{:#x}) "
+                 "heap=[{:#x},+{:#x}) arena={:#x}",
+                 GetInteger(base_addr), code_set.memory.size(), info.stack_start, info.stack_size,
+                 info.alias_start, info.alias_size, info.heap_start, info.heap_size,
+                 info.arena_base);
+    }
+
     const auto& patch = code_set.PatchSegment();
     const auto& post_patch = code_set.PostPatchSegment();
     if (this->IsApplication() && Settings::IsNceEnabled() && patch.size != 0) {
