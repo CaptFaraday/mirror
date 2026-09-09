@@ -151,6 +151,13 @@ u128 InterpreterVisitor::GetVec(Vec v) {
 }
 
 u64 InterpreterVisitor::GetReg(Reg r) {
+    // R31 as a data operand is the zero register. Base-register uses that mean
+    // SP are routed through GetSp() by every caller, so reaching here with R31
+    // always means ZR. m_regs is a 31-element span over mcontext_t::regs, whose
+    // element [31] aliases the saved SP; reading it would return SP, not zero.
+    if (r == Reg::ZR) {
+        return 0;
+    }
     return m_regs[static_cast<u32>(r)];
 }
 
@@ -167,6 +174,11 @@ void InterpreterVisitor::SetVec(Vec v, u128 value) {
 }
 
 void InterpreterVisitor::SetReg(Reg r, u64 value) {
+    // Writes to the zero register are discarded. Without this, m_regs[31] would
+    // clobber the saved SP in mcontext (see GetReg).
+    if (r == Reg::ZR) {
+        return;
+    }
     m_regs[static_cast<u32>(r)] = value;
 }
 
